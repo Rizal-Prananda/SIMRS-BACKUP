@@ -1,0 +1,34 @@
+services:
+  frontend:
+    image: node:22-alpine
+    container_name: simrs-dataguard-frontend
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "8014:5173"
+    volumes:
+      - .:/app
+      - dataguard_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: simrs-dataguard-backend
+    working_dir: /app
+    command: sh -c "composer install --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
+    expose:
+      - "8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - dataguard_vendor:/app/vendor
+    restart: unless-stopped
+
+volumes:
+  dataguard_node_modules:
+  dataguard_vendor:

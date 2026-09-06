@@ -1,0 +1,24 @@
+node_modules
+dist
+vendor
+.env
+.env.*
+!.env.example
+*.log
+*.sqlite*
+*.sql*
+*.md
+.phpunit.result.cache
+.DS_Store
+
+# Local analysis and documentation artifacts
+/Dokumentasi-MD/
+/artifacts/
+/dataguard-home-desktop.png
+/qa-results.json
+
+# Laravel runtime state
+/backend/storage/framework/cache/data/
+/backend/storage/framework/sessions/
+/backend/storage/framework/views/
+/backend/storage/logs/
