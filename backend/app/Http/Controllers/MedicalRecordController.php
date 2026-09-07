@@ -352,6 +352,49 @@ class MedicalRecordController extends Controller
                 '_sort_id' => (int) $entry->kdid,
             ]);
 
+        $doctorDiagnosisEntries = DB::table('ops_diagnosa as soap')
+            ->leftJoin('person as author', 'author.pid', '=', 'soap.doctor_id')
+            ->where('soap.regpid', $regpid)
+            ->where(function (Builder $query): void {
+                $query->where('soap.is_perawat', false)->orWhereNull('soap.is_perawat');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereRaw("NULLIF(TRIM(COALESCE(soap.subjective, '')), '') IS NOT NULL")
+                    ->orWhereRaw("NULLIF(TRIM(COALESCE(soap.objective, '')), '') IS NOT NULL")
+                    ->orWhereRaw("NULLIF(TRIM(COALESCE(soap.assesment, '')), '') IS NOT NULL")
+                    ->orWhereRaw("NULLIF(TRIM(COALESCE(soap.planning, '')), '') IS NOT NULL");
+            })
+            ->get([
+                'soap.odid', 'soap.doctor_id as author_id', 'author.name_real as author_name',
+                'soap.create_time as create_time_raw', 'soap.diag_date as diag_date_raw',
+                'soap.subjective', 'soap.objective', 'soap.assesment', 'soap.planning',
+            ])
+            ->map(function (object $entry): array {
+                $recordedAt = $entry->create_time_raw ?: $entry->diag_date_raw;
+
+                return [
+                    'entry_id' => 'doctor-diagnosis-'.$entry->odid,
+                    'entry_type' => 'doctor',
+                    'source' => 'ops_diagnosa',
+                    'role_label' => 'Dokter',
+                    'kdid' => null,
+                    'odid' => (int) $entry->odid,
+                    'odpid' => null,
+                    'catperid' => null,
+                    'author_id' => (int) $entry->author_id,
+                    'author_name' => $this->value($entry->author_name),
+                    'doctor_pid' => (int) $entry->author_id,
+                    'doctor_name' => $this->value($entry->author_name),
+                    'recorded_at' => $this->displayDateTime($recordedAt),
+                    'subjective' => $this->value($entry->subjective),
+                    'objective' => $this->value($entry->objective),
+                    'assessment' => $this->value($entry->assesment),
+                    'planning' => $this->value($entry->planning),
+                    '_sort_time' => $this->soapSortTimestamp($recordedAt, 'Asia/Jakarta'),
+                    '_sort_id' => (int) $entry->odid,
+                ];
+            });
+
         $nurseDiagnosisEntries = DB::table('ops_diagnosa_perawat as soap')
             ->leftJoin('person as author', 'author.pid', '=', 'soap.create_id')
             ->where('soap.regpid', $regpid)
@@ -415,6 +458,7 @@ class MedicalRecordController extends Controller
             ]);
 
         $entries = $doctorEntries
+            ->concat($doctorDiagnosisEntries)
             ->concat($nurseDiagnosisEntries)
             ->concat($nurseProgressEntries)
             ->sort(fn (array $first, array $second): int => [$first['_sort_time'], $first['_sort_id']] <=> [$second['_sort_time'], $second['_sort_id']])
@@ -445,6 +489,11 @@ class MedicalRecordController extends Controller
 
         $nameSearch = '%'.mb_strtolower($search).'%';
         $digits = preg_replace('/\D/', '', $search) ?? '';
+
+        if ($digits !== '' && strlen($digits) <= 8 && preg_match('/^[\d\s.-]+$/', $search) === 1) {
+            $query->where('pid', (int) $digits);
+            return;
+        }
 
         $query->where(function (Builder $nested) use ($nameSearch, $digits): void {
             $nested->whereRaw("LOWER(COALESCE(name_real, '') || ' ' || COALESCE(name_family, '')) LIKE ?", [$nameSearch]);

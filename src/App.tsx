@@ -43,7 +43,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route element={<AppLayout username={user.login_name} onLogout={logout} />}>
+      <Route element={<AppLayout user={user} onLogout={logout} />}>
         <Route index element={<HomePage />} />
         <Route path="rekam-medis" element={<MedicalRecordsPage />} />
         <Route path="rekam-medis/:pid" element={<MedicalRecordDetailPage />} />

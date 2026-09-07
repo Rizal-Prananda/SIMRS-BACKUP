@@ -114,6 +114,20 @@ class MedicalRecordReadOnlyTest extends TestCase
             $table->text('planning')->nullable();
         });
 
+        Schema::create('ops_diagnosa', function (Blueprint $table): void {
+            $table->integer('odid')->primary();
+            $table->integer('regpid');
+            $table->dateTime('diag_date');
+            $table->integer('doctor_id');
+            $table->integer('create_id')->nullable();
+            $table->dateTime('create_time')->nullable();
+            $table->boolean('is_perawat')->nullable();
+            $table->text('subjective')->nullable();
+            $table->text('objective')->nullable();
+            $table->text('assesment')->nullable();
+            $table->text('planning')->nullable();
+        });
+
         Schema::create('ops_diagnosa_perawat', function (Blueprint $table): void {
             $table->integer('odpid')->primary();
             $table->integer('regpid');
@@ -163,9 +177,13 @@ class MedicalRecordReadOnlyTest extends TestCase
             'pid' => 768, 'name_real' => 'Bambang', 'name_family' => null, 'date_birth' => null, 'sex' => 'm', 'birth_place' => null, 'mobile_nr' => null, 'addr_str' => null,
         ]);
         DB::table('person')->insert([
+            'pid' => 814, 'name_real' => 'RAYYAN PRADIPTA ARIWIBOWO', 'name_family' => '', 'date_birth' => null, 'sex' => 'm', 'birth_place' => null, 'mobile_nr' => null, 'addr_str' => null,
+        ]);
+        DB::table('person')->insert([
             'pid' => -570, 'name_real' => 'Akun Dokter', 'name_family' => null, 'date_birth' => null, 'sex' => 'm', 'birth_place' => null, 'mobile_nr' => null, 'addr_str' => null,
         ]);
         DB::table('person')->insert(['pid' => -113, 'name_real' => 'dr. Dokter Utama', 'name_family' => null]);
+        DB::table('person')->insert(['pid' => -111, 'name_real' => 'dr. Adila Nurhadiya, Sp. A', 'name_family' => null]);
         DB::table('person')->insert(['pid' => -533, 'name_real' => 'dr. Dokter Pencatat', 'name_family' => null]);
         DB::table('person')->insert(['pid' => -515, 'name_real' => 'Dewi Wulandari', 'name_family' => null]);
         DB::table('department')->insert(['did' => 5, 'name_formal' => 'RAWAT INAP']);
@@ -176,10 +194,15 @@ class MedicalRecordReadOnlyTest extends TestCase
         DB::table('regpatient')->insert([
             ['regpid' => 90354, 'pid' => 14768, 'no_reg' => '2503250216', 'current_dept_nr' => 5, 'current_bed_nr' => 454, 'doctor_id' => -113, 'ifirm_id' => 1185, 'reg_date' => '2025-03-25 15:04:15', 'discharge_date' => '2025-03-27 12:51:52', 'is_discharged' => true, 'reg_status' => 'sembuh', 'no_sep' => '0301R0010325V000001', 'is_del' => false],
             ['regpid' => 87541, 'pid' => 14768, 'no_reg' => '2503130115', 'current_dept_nr' => 5, 'current_bed_nr' => null, 'doctor_id' => -113, 'ifirm_id' => null, 'reg_date' => '2025-03-13 13:13:12', 'discharge_date' => null, 'is_discharged' => false, 'reg_status' => null, 'no_sep' => null, 'is_del' => false],
+            ['regpid' => 64482, 'pid' => 814, 'no_reg' => '2411290213', 'current_dept_nr' => 5, 'current_bed_nr' => null, 'doctor_id' => -111, 'ifirm_id' => null, 'reg_date' => '2024-11-29 16:29:42', 'discharge_date' => '2024-11-29 17:35:31', 'is_discharged' => true, 'reg_status' => null, 'no_sep' => null, 'is_del' => false],
         ]);
         DB::table('kunjungan_dokter')->insert([
             ['kdid' => 48677, 'pid' => -113, 'regpid' => 90354, 'tgl_kunjungan' => '2025-03-26 15:16:07', 'subjective' => "Keluhan utama\nsejak pagi", 'objective' => 'Tekanan darah stabil', 'assesment' => 'Observasi', 'planning' => 'Kontrol berkala'],
             ['kdid' => 48708, 'pid' => -533, 'regpid' => 90354, 'tgl_kunjungan' => '2025-03-27 08:56:58', 'subjective' => null, 'objective' => '', 'assesment' => 'Membaik', 'planning' => 'Pulang'],
+        ]);
+        DB::table('ops_diagnosa')->insert([
+            'odid' => 361908, 'regpid' => 64482, 'diag_date' => '2024-11-29 09:59:23', 'doctor_id' => -111, 'create_id' => -111, 'create_time' => '2024-11-29 16:59:23', 'is_perawat' => false,
+            'subjective' => 'Keluhan dokter', 'objective' => 'Pemeriksaan dokter', 'assesment' => 'Diagnosis dokter', 'planning' => 'Rencana dokter',
         ]);
         DB::table('ops_diagnosa_perawat')->insert([
             'odpid' => 47180, 'regpid' => 90354, 'diag_date' => '2025-03-26 16:20:00', 'doctor_id' => -533, 'create_id' => -515, 'create_time' => '2025-03-26 16:20:00',
@@ -225,6 +248,23 @@ class MedicalRecordReadOnlyTest extends TestCase
             ->assertJsonPath('meta.per_page', 10);
     }
 
+    public function test_formatted_medical_record_search_uses_an_exact_pid_query_without_name_scan(): void
+    {
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->withSession(['web_user' => ['login_name' => 'operator.test']])
+            ->getJson('/api/medical-records/patients?search=00-01-47-68&per_page=10&page=1')
+            ->assertOk()
+            ->assertJsonPath('data.0.pid', 14768);
+
+        $sql = implode("\n", $queries);
+        $this->assertStringNotContainsString('lower(coalesce', $sql);
+        $this->assertStringContainsString('pid', $sql);
+    }
+
     public function test_patient_list_is_sorted_by_medical_record_number_ascending(): void
     {
         $response = $this->withSession(['web_user' => ['login_name' => 'operator.test']])
@@ -233,8 +273,10 @@ class MedicalRecordReadOnlyTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.0.pid', 768)
             ->assertJsonPath('data.0.medical_record_number', '00-00-07-68')
-            ->assertJsonPath('data.1.pid', 14768)
-            ->assertJsonPath('data.1.medical_record_number', '00-01-47-68');
+            ->assertJsonPath('data.1.pid', 814)
+            ->assertJsonPath('data.1.medical_record_number', '00-00-08-14')
+            ->assertJsonPath('data.2.pid', 14768)
+            ->assertJsonPath('data.2.medical_record_number', '00-01-47-68');
     }
 
     public function test_authenticated_user_can_view_read_only_patient_detail(): void
@@ -345,6 +387,27 @@ class MedicalRecordReadOnlyTest extends TestCase
             ->assertJsonPath('data.3.role_label', 'SOAP Perawat')
             ->assertJsonPath('data.3.author_name', 'Dewi Wulandari')
             ->assertJsonPath('data.3.recorded_at', '27 Mar 2025, 10:03');
+    }
+
+    public function test_outpatient_doctor_soap_is_loaded_from_ops_diagnosa(): void
+    {
+        $response = $this->withSession(['web_user' => ['login_name' => 'operator.test']])
+            ->getJson('/api/medical-records/visits/64482/soap');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.entry_id', 'doctor-diagnosis-361908')
+            ->assertJsonPath('data.0.entry_type', 'doctor')
+            ->assertJsonPath('data.0.source', 'ops_diagnosa')
+            ->assertJsonPath('data.0.role_label', 'Dokter')
+            ->assertJsonPath('data.0.odid', 361908)
+            ->assertJsonPath('data.0.doctor_pid', -111)
+            ->assertJsonPath('data.0.doctor_name', 'dr. Adila Nurhadiya, Sp. A')
+            ->assertJsonPath('data.0.recorded_at', '29 Nov 2024, 16:59')
+            ->assertJsonPath('data.0.subjective', 'Keluhan dokter')
+            ->assertJsonPath('data.0.objective', 'Pemeriksaan dokter')
+            ->assertJsonPath('data.0.assessment', 'Diagnosis dokter')
+            ->assertJsonPath('data.0.planning', 'Rencana dokter');
     }
 
     public function test_visit_without_final_soap_returns_an_empty_list(): void

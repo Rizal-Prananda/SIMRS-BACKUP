@@ -17,6 +17,7 @@ Route::prefix('api/auth')->controller(AuthController::class)->group(function ():
     Route::get('/csrf', 'csrf');
     Route::post('/login', 'login')->middleware('throttle:5,1');
     Route::get('/me', 'me');
+    Route::patch('/password', 'changePassword')->middleware(EnsureWebUserAuthenticated::class);
     Route::post('/logout', 'logout');
 });
 
@@ -29,6 +30,7 @@ Route::prefix('api/users')
     ->group(function (): void {
         Route::get('/', 'index');
         Route::get('/{loginId}', 'show')->whereNumber('loginId');
+        Route::patch('/{loginId}/password', 'resetPassword')->whereNumber('loginId');
     });
 
 Route::prefix('api/doctors')

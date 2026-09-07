@@ -45,6 +45,36 @@ test('visit history can be searched by registration number', async () => {
   assert.match(list, /filteredVisits\.map/)
 })
 
+test('topbar patient search opens Data Medis and automatically loads visits on Enter', async () => {
+  const [topbar, dataMedis, service, api, styles] = await Promise.all([
+    read('src/components/layout/Topbar.tsx'),
+    read('src/pages/medical-records/DataMedisPage.tsx'),
+    read('src/services/medicalRecords.ts'),
+    read('src/services/api.ts'),
+    read('src/styles/theme.css'),
+  ])
+
+  assert.match(topbar, /useNavigate/)
+  assert.match(topbar, /<form className="search-button"[^>]*onSubmit=\{searchPatient\}/)
+  assert.match(topbar, /placeholder="Cari nama atau No\. RM\.\.\."/)
+  assert.match(topbar, /search:\s*`\?q=\$\{encodeURIComponent\(query\)\}`/)
+  assert.match(dataMedis, /searchParams\.get\('q'\)/)
+  assert.match(dataMedis, /medicalRecordsApi\.patients\(querySearch/)
+  assert.match(dataMedis, /await medicalRecordsApi\.visits\(matchedPatient\.pid, '', '', controller\.signal\)/)
+  assert.match(dataMedis, /setPatient\(visitResponse\.data\.patient\)/)
+  assert.match(dataMedis, /setVisits\(visitResponse\.data\.visits\)/)
+  assert.match(dataMedis, /const searchRequestId = useRef\(0\)/)
+  assert.match(dataMedis, /requestId !== searchRequestId\.current/)
+  assert.match(dataMedis, /new URLSearchParams\(window\.location\.search\)\.get\('q'\) !== querySearch/)
+  assert.match(dataMedis, /const controller = new AbortController\(\)/)
+  assert.match(dataMedis, /controller\.abort\(\)/)
+  assert.match(dataMedis, /medicalRecordsApi\.patients\(querySearch, 1, 10, controller\.signal\)/)
+  assert.match(service, /patients\(search: string, page = 1, perPage = 10, signal\?: AbortSignal\)/)
+  assert.match(api, /AbortSignal\.any\(\[controller\.signal, init\.signal\]\)/)
+  assert.doesNotMatch(dataMedis, /if \(!querySearch \|\| selectedPid\) return/)
+  assert.match(styles, /\.search-button input\s*\{/)
+})
+
 test('SOAP panel distinguishes nurse SOAP entries', async () => {
   const [detail, service] = await Promise.all([
     read('src/pages/medical-records/MedicalVisitDetailPage.tsx'),
@@ -52,6 +82,8 @@ test('SOAP panel distinguishes nurse SOAP entries', async () => {
   ])
 
   assert.match(service, /entry_type: 'doctor' \| 'nurse'/)
+  assert.match(service, /'ops_diagnosa'/)
+  assert.match(service, /odid\?: number \| null/)
   assert.match(service, /'ops_catper'/)
   assert.match(service, /catperid\?: number \| null/)
   assert.match(detail, /entry\.role_label/)

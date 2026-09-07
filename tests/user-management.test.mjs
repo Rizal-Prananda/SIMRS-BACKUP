@@ -21,7 +21,7 @@ test('User module menu and route are restricted to rizal.prananda', async () => 
   assert.match(app, /UserAdminGuard/)
   assert.match(app, /username !== USER_ADMIN_USERNAME/)
   assert.match(app, /<Navigate to="\/" replace/)
-  assert.match(layout, /<Sidebar[^>]*username=\{username\}/s)
+  assert.match(layout, /<Sidebar[^>]*username=\{user\.login_name\}/s)
   assert.match(sidebar, /item\.adminOnly && username !== USER_ADMIN_USERNAME/)
 })
 
@@ -63,8 +63,11 @@ test('User Management loads the real paginated user list and keeps same-page det
   assert.doesNotMatch(page, />Tambah User<|>Edit User<|>Hapus User</)
 })
 
-test('Reset Password modal validates locally and never calls an API', async () => {
-  const page = await read('src/pages/users/UserManagementPage.tsx')
+test('Reset Password validates locally and persists through an authenticated CSRF request', async () => {
+  const [page, service] = await Promise.all([
+    read('src/pages/users/UserManagementPage.tsx'),
+    read('src/services/users.ts'),
+  ])
 
   assert.match(page, /role="dialog"/)
   assert.match(page, /aria-modal="true"/)
@@ -81,9 +84,16 @@ test('Reset Password modal validates locally and never calls an API', async () =
   assert.match(page, /valid: \/\\d\//)
   assert.match(page, /password === confirmation/)
   assert.match(page, />Batal</)
-  assert.match(page, />Reset Password</)
-  assert.match(page, /Tidak ada data yang diubah\./)
-  assert.doesNotMatch(page, /authApi|fetch\(|axios|web_users/)
+  assert.match(page, /userApi\.resetPassword/)
+  assert.match(page, /await onComplete\(password\)/)
+  assert.match(page, /Menyimpan\.\.\./)
+  assert.match(page, /role="alert"/)
+  assert.doesNotMatch(page, /Simulasi reset password|reset password[^\n]*Tidak ada data yang diubah/)
+  assert.match(service, /\/api\/auth\/csrf/)
+  assert.match(service, /method:\s*'PATCH'/)
+  assert.match(service, /X-CSRF-TOKEN/)
+  assert.match(service, /credentials:\s*'include'/)
+  assert.match(service, /password_confirmation:\s*password/)
 })
 
 test('User Management keeps a 75/25 desktop layout and responsive detail panel', async () => {

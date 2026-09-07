@@ -98,4 +98,27 @@ export const userApi = {
       },
     }
   },
+  async resetPassword(userId: number, password: string): Promise<{ message: string }> {
+    const csrfResponse = await fetch('/api/auth/csrf', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+    const csrfPayload = await csrfResponse.json().catch(() => ({})) as { csrf_token?: string; message?: string }
+    if (!csrfResponse.ok || !csrfPayload.csrf_token) throw new Error(csrfPayload.message || 'Token keamanan tidak dapat dibuat.')
+
+    const response = await fetch(`/api/users/${encodeURIComponent(userId)}/password`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfPayload.csrf_token,
+      },
+      body: JSON.stringify({ password, password_confirmation: password }),
+    })
+    const payload = await response.json().catch(() => ({})) as { message?: string }
+    if (!response.ok) throw new Error(payload.message || 'Password gagal disimpan ke database.')
+
+    return { message: payload.message || 'Password berhasil direset.' }
+  },
 }

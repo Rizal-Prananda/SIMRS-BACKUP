@@ -50,7 +50,7 @@ export function Sidebar({ open, collapsed, username, onClose }: Props) {
         </nav>
         <div className="system-status">
           <div className="system-status__icon"><LockKeyhole size={17} /></div>
-          <div><strong><i /> Mode Aman</strong><span>Akses baca-saja</span></div>
+          <div><strong><i /> SIMRS - Development</strong><span>Read Only By RP</span></div>
         </div>
       </aside>
       {open && <button className="sidebar-backdrop" aria-label="Tutup navigasi" onClick={onClose} />}

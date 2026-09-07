@@ -47,9 +47,10 @@ export type VisitDetail = {
 export type SoapEntry = {
   entry_id: string
   entry_type: 'doctor' | 'nurse'
-  source: 'kunjungan_dokter' | 'ops_diagnosa_perawat' | 'ops_catper'
+  source: 'kunjungan_dokter' | 'ops_diagnosa' | 'ops_diagnosa_perawat' | 'ops_catper'
   role_label: 'Dokter' | 'SOAP Perawat'
   kdid: number | null
+  odid?: number | null
   odpid: number | null
   catperid?: number | null
   author_id: number
@@ -132,17 +133,17 @@ export const medicalRecordsApi = {
   detail(pid: string) {
     return apiRequest<{ data: PatientDetail }>(`/medical-records/${encodeURIComponent(pid)}`)
   },
-  patients(search: string, page = 1, perPage = 10) {
+  patients(search: string, page = 1, perPage = 10, signal?: AbortSignal) {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     if (search) params.set('search', search)
-    return apiRequest<{ data: PatientListItem[]; meta: PaginationMeta }>(`/medical-records/patients?${params}`)
+    return apiRequest<{ data: PatientListItem[]; meta: PaginationMeta }>(`/medical-records/patients?${params}`, { signal })
   },
-  visits(pid: number, dateFrom = '', dateTo = '') {
+  visits(pid: number, dateFrom = '', dateTo = '', signal?: AbortSignal) {
     const params = new URLSearchParams()
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
     const query = params.size ? `?${params}` : ''
-    return apiRequest<{ data: { patient: PatientSummary; visits: PatientVisit[] } }>(`/medical-records/patients/${encodeURIComponent(pid)}/visits${query}`)
+    return apiRequest<{ data: { patient: PatientSummary; visits: PatientVisit[] } }>(`/medical-records/patients/${encodeURIComponent(pid)}/visits${query}`, { signal })
   },
   visit(regpid: string) {
     return apiRequest<{ data: { patient: PatientSummary; visit: VisitDetail } }>(`/medical-records/visits/${encodeURIComponent(regpid)}`)

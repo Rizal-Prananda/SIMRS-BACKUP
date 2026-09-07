@@ -10,8 +10,8 @@ export function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    document.title = 'Login · SIMRS DataGuard'
-    return () => { document.title = 'SIMRS DataGuard' }
+    document.title = 'SIMRS - Development Read Only By RP'
+    return () => { document.title = 'SIMRS - Development Read Only By RP' }
   }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

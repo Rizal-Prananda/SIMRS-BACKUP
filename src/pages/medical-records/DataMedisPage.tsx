@@ -1,5 +1,5 @@
 import { CalendarRange, ChevronRight, CircleUserRound, Eye, Search, ShieldCheck, UserRoundSearch, X } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PageContainer } from '../../components/ui/PageContainer'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/ViewState'
@@ -8,10 +8,11 @@ import { medicalRecordsApi, type PatientListItem, type PatientSummary, type Pati
 export function DataMedisPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialPid = Number(searchParams.get('pid'))
+  const querySearch = searchParams.get('q')?.trim() ?? ''
   const [selectedPid, setSelectedPid] = useState<number | null>(Number.isInteger(initialPid) && initialPid > 0 ? initialPid : null)
-  const [draftSearch, setDraftSearch] = useState('')
+  const [draftSearch, setDraftSearch] = useState(querySearch)
   const [patients, setPatients] = useState<PatientListItem[]>([])
-  const [searching, setSearching] = useState(false)
+  const [searching, setSearching] = useState(Boolean(querySearch))
   const [searchError, setSearchError] = useState(false)
   const [patient, setPatient] = useState<PatientSummary | null>(null)
   const [visits, setVisits] = useState<PatientVisit[]>([])
@@ -22,6 +23,7 @@ export function DataMedisPage() {
   const [period, setPeriod] = useState({ from: '', to: '' })
   const [draftVisitSearch, setDraftVisitSearch] = useState('')
   const [visitSearch, setVisitSearch] = useState('')
+  const searchRequestId = useRef(0)
 
   const normalizedVisitSearch = visitSearch.trim().toLowerCase()
   const filteredVisits = visits.filter((visit) => visit.registration_number.toLowerCase().includes(normalizedVisitSearch))
@@ -59,7 +61,7 @@ export function DataMedisPage() {
     }
   }
 
-  function selectPatient(nextPatient: PatientListItem) {
+  const selectPatient = useCallback((nextPatient: PatientListItem) => {
     setSelectedPid(nextPatient.pid)
     setPatient(null)
     setVisits([])
@@ -67,7 +69,53 @@ export function DataMedisPage() {
     setVisitsError(false)
     setPatients([])
     setSearchParams({ pid: String(nextPatient.pid) })
-  }
+  }, [setSearchParams])
+
+  useEffect(() => {
+    const requestId = ++searchRequestId.current
+    if (!querySearch) return
+    let active = true
+    const controller = new AbortController()
+
+    async function loadGlobalPatient() {
+      try {
+        const response = await medicalRecordsApi.patients(querySearch, 1, 10, controller.signal)
+        if (!active || requestId !== searchRequestId.current || new URLSearchParams(window.location.search).get('q') !== querySearch) return
+        setDraftSearch(querySearch)
+        setSearchError(false)
+        const normalizedQuery = querySearch.toLowerCase()
+        const queryDigits = querySearch.replace(/\D/g, '')
+        const matchedPatient = response.data.find((item) =>
+          item.name.toLowerCase() === normalizedQuery ||
+          (queryDigits !== '' && item.pid === Number(queryDigits))
+        ) ?? response.data[0]
+
+        if (!matchedPatient) {
+          setPatients([])
+          return
+        }
+
+        const visitResponse = await medicalRecordsApi.visits(matchedPatient.pid, '', '', controller.signal)
+        if (!active || requestId !== searchRequestId.current || new URLSearchParams(window.location.search).get('q') !== querySearch) return
+        setSelectedPid(matchedPatient.pid)
+        setPatient(visitResponse.data.patient)
+        setVisits(visitResponse.data.visits)
+        setVisitsLoading(false)
+        setVisitsError(false)
+        setPatients([])
+        setSearching(false)
+        setSearchParams({ pid: String(matchedPatient.pid) })
+      } catch (error) {
+        if (active && requestId === searchRequestId.current && (error as DOMException)?.name !== 'AbortError') setSearchError(true)
+      } finally {
+        if (active && requestId === searchRequestId.current) setSearching(false)
+      }
+    }
+
+    void loadGlobalPatient()
+
+    return () => { active = false; controller.abort() }
+  }, [querySearch, setSearchParams])
 
   function resetPatient() {
     setSelectedPid(null)

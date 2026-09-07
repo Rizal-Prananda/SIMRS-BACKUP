@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\WebUserPasswordVerifier;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -103,7 +104,7 @@ class UserManagementReadOnlyTest extends TestCase
             ->assertJsonPath('data.0.status', 'Nonaktif');
     }
 
-    public function test_user_management_api_is_get_only_and_does_not_change_web_users(): void
+    public function test_user_profile_mutation_routes_remain_disabled_and_unchanged(): void
     {
         $before = DB::table('web_users')->orderBy('login_id')->get()->toJson();
         $session = $this->withSession(['web_user' => ['login_name' => 'rizal.prananda']]);
@@ -113,5 +114,52 @@ class UserManagementReadOnlyTest extends TestCase
         $session->deleteJson('/api/users/63')->assertMethodNotAllowed();
 
         $this->assertSame($before, DB::table('web_users')->orderBy('login_id')->get()->toJson());
+    }
+
+    public function test_primary_admin_can_reset_a_user_password_in_legacy_compatible_format(): void
+    {
+        $response = $this->withSession(['_token' => 'csrf-test', 'web_user' => ['login_name' => 'rizal.prananda']])
+            ->withHeader('X-CSRF-TOKEN', 'csrf-test')
+            ->patchJson('/api/users/63/password', [
+                'password' => 'Password.Baru224',
+                'password_confirmation' => 'Password.Baru224',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Password ibrahim.arfan berhasil direset.');
+
+        $stored = (string) DB::table('web_users')->where('login_id', 63)->value('login_pass');
+        $this->assertSame(md5('Password.Baru224'), $stored);
+        $this->assertNotSame('Password.Baru224', $stored);
+        $this->assertTrue(app(WebUserPasswordVerifier::class)->verify('Password.Baru224', $stored));
+    }
+
+    public function test_password_reset_rejects_non_admin_invalid_password_and_unknown_user(): void
+    {
+        $original = (string) DB::table('web_users')->where('login_id', 63)->value('login_pass');
+
+        $this->withSession(['_token' => 'csrf-test', 'web_user' => ['login_name' => 'other.user']])
+            ->withHeader('X-CSRF-TOKEN', 'csrf-test')
+            ->patchJson('/api/users/63/password', [
+                'password' => 'Password.Baru224',
+                'password_confirmation' => 'Password.Baru224',
+            ])->assertForbidden();
+
+        $this->withSession(['_token' => 'csrf-test', 'web_user' => ['login_name' => 'rizal.prananda']])
+            ->withHeader('X-CSRF-TOKEN', 'csrf-test')
+            ->patchJson('/api/users/63/password', [
+                'password' => 'terlalulemah',
+                'password_confirmation' => 'tidaksama',
+            ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['password']);
+
+        $this->withSession(['_token' => 'csrf-test', 'web_user' => ['login_name' => 'rizal.prananda']])
+            ->withHeader('X-CSRF-TOKEN', 'csrf-test')
+            ->patchJson('/api/users/999/password', [
+                'password' => 'Password.Baru224',
+                'password_confirmation' => 'Password.Baru224',
+            ])->assertNotFound();
+
+        $this->assertSame($original, DB::table('web_users')->where('login_id', 63)->value('login_pass'));
     }
 }

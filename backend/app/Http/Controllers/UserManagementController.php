@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserManagementController extends Controller
 {
@@ -62,6 +64,30 @@ class UserManagementController extends Controller
         abort_if(! $row, 404);
 
         return response()->json(['data' => $this->serializeUser($row)]);
+    }
+
+    public function resetPassword(Request $request, int $loginId): JsonResponse
+    {
+        $credentials = $request->validate([
+            'password' => ['required', 'string', 'confirmed', 'max:255', Password::min(8)->mixedCase()->numbers()->symbols()],
+        ]);
+
+        try {
+            $user = DB::table('web_users')
+                ->where('login_id', $loginId)
+                ->first(['login_id', 'login_name']);
+            abort_if(! $user, 404, 'User tidak ditemukan.');
+
+            DB::table('web_users')
+                ->where('login_id', $loginId)
+                ->update(['login_pass' => hash('md5', $credentials['password'])]);
+        } catch (QueryException) {
+            return response()->json(['message' => 'Password gagal disimpan ke database SIMRS.'], 503);
+        }
+
+        return response()->json([
+            'message' => 'Password '.$user->login_name.' berhasil direset.',
+        ]);
     }
 
     private function userQuery(): Builder

@@ -155,7 +155,11 @@ export function UserManagementPage() {
           {!selectedUser ? <div className="user-detail-empty"><span><UserRound size={28} /></span><h3>Pilih User</h3><p>Pilih salah satu user dari daftar untuk melihat informasi akun.</p></div> : <UserDetail user={selectedUser} onResetPassword={() => setResetUserId(selectedUser.id)} onDeactivate={() => setFeedback(`Simulasi nonaktifkan ${selectedUser.username}. Tidak ada data yang diubah.`)} />}
         </aside>
       </div>
-      {resetUser && <PasswordResetModal user={resetUser} onClose={() => setResetUserId(null)} onComplete={() => { setResetUserId(null); setFeedback(`Simulasi reset password ${resetUser.username} selesai. Tidak ada data yang diubah.`) }} />}
+      {resetUser && <PasswordResetModal user={resetUser} onClose={() => setResetUserId(null)} onComplete={async (password) => {
+        const result = await userApi.resetPassword(resetUser.id, password)
+        setResetUserId(null)
+        setFeedback(result.message)
+      }} />}
     </PageContainer>
   )
 }
@@ -181,17 +185,19 @@ function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: strin
   return <div><dt><span>{icon}</span>{label}</dt><dd>{value}</dd></div>
 }
 
-function PasswordResetModal({ user, onClose, onComplete }: { user: UserAccount; onClose: () => void; onComplete: () => void }) {
+function PasswordResetModal({ user, onClose, onComplete }: { user: UserAccount; onClose: () => void; onComplete: (password: string) => Promise<void> }) {
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    const closeOnEscape = (event: KeyboardEvent) => event.key === 'Escape' && !submitting && onClose()
     document.addEventListener('keydown', closeOnEscape)
     return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
+  }, [onClose, submitting])
 
   const rules = [
     { label: 'Minimal 8 karakter', valid: password.length >= 8 },
@@ -203,15 +209,28 @@ function PasswordResetModal({ user, onClose, onComplete }: { user: UserAccount; 
   const confirmationMatches = confirmation.length > 0 && password === confirmation
   const formValid = rules.every((rule) => rule.valid) && confirmationMatches
 
-  return <div className="user-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  async function submitPassword() {
+    if (!formValid || submitting) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await onComplete(password)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Password gagal disimpan ke database.')
+      setSubmitting(false)
+    }
+  }
+
+  return <div className="user-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}>
     <section className="user-reset-modal" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
-      <header><div><span><Lock size={18} /></span><div><h3 id="reset-password-title">Reset Password</h3><p>Buat password baru untuk akun terpilih.</p></div></div><button type="button" aria-label="Tutup modal" onClick={onClose}><X size={17} /></button></header>
-      <form onSubmit={(event) => { event.preventDefault(); if (formValid) onComplete() }}>
+      <header><div><span><Lock size={18} /></span><div><h3 id="reset-password-title">Reset Password</h3><p>Buat password baru untuk akun terpilih.</p></div></div><button type="button" aria-label="Tutup modal" disabled={submitting} onClick={onClose}><X size={17} /></button></header>
+      <form onSubmit={(event) => { event.preventDefault(); void submitPassword() }}>
         <div className="reset-user-summary"><span className={`user-avatar user-avatar--${roleClass(user.role)}`}>{user.initials}</span><div><small>USERNAME</small><strong>{user.username}</strong><p>{user.fullName}</p></div></div>
-        <label className="user-password-field"><span>Password Baru</span><div><Lock size={16} /><input autoFocus type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" /><button type="button" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
-        <label className="user-password-field"><span>Konfirmasi Password Baru</span><div><Lock size={16} /><input type={showConfirmation ? 'text' : 'password'} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" /><button type="button" aria-label={showConfirmation ? 'Sembunyikan konfirmasi password' : 'Tampilkan konfirmasi password'} onClick={() => setShowConfirmation((value) => !value)}>{showConfirmation ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
+        <label className="user-password-field"><span>Password Baru</span><div><Lock size={16} /><input autoFocus disabled={submitting} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" /><button type="button" disabled={submitting} aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
+        <label className="user-password-field"><span>Konfirmasi Password Baru</span><div><Lock size={16} /><input disabled={submitting} type={showConfirmation ? 'text' : 'password'} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" /><button type="button" disabled={submitting} aria-label={showConfirmation ? 'Sembunyikan konfirmasi password' : 'Tampilkan konfirmasi password'} onClick={() => setShowConfirmation((value) => !value)}>{showConfirmation ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
         <div className="password-rules"><strong>Ketentuan password</strong><div>{rules.map((rule) => <span className={rule.valid ? 'valid' : ''} key={rule.label}><i>{rule.valid ? <Check size={11} /> : null}</i>{rule.label}</span>)}</div><span className={confirmationMatches ? 'valid' : ''}><i>{confirmationMatches ? <Check size={11} /> : null}</i>Konfirmasi password sesuai</span></div>
-        <footer><button type="button" className="user-modal-cancel" onClick={onClose}>Batal</button><button type="submit" className="user-modal-submit" disabled={!formValid}><Lock size={15} /> Reset Password</button></footer>
+        {submitError && <div className="user-reset-error" role="alert"><Info size={15} /><span>{submitError}</span></div>}
+        <footer><button type="button" className="user-modal-cancel" disabled={submitting} onClick={onClose}>Batal</button><button type="submit" className="user-modal-submit" disabled={!formValid || submitting}>{submitting ? <><span className="records-spinner user-reset-spinner" /> Menyimpan...</> : <><Lock size={15} /> Reset Password</>}</button></footer>
       </form>
     </section>
   </div>

@@ -1,4 +1,4 @@
-export type AuthUser = { login_name: string }
+export type AuthUser = { login_name: string; full_name: string }
 
 type AuthResponse = { user: AuthUser }
 type CsrfResponse = { csrf_token: string }
@@ -43,6 +43,18 @@ export const authApi = {
     return request<{ message: string }>('/api/auth/logout', {
       method: 'POST',
       headers: { 'X-CSRF-TOKEN': token },
+    })
+  },
+  async changePassword(currentPassword: string, password: string) {
+    const token = await csrfToken()
+    return request<{ message: string }>('/api/auth/password', {
+      method: 'PATCH',
+      headers: { 'X-CSRF-TOKEN': token },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        password,
+        password_confirmation: password,
+      }),
     })
   },
 }
